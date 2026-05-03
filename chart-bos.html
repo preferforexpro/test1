@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMC Structure Chart — BOS / CHoCH</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  --bg:#f0f2f7; --s0:#fff; --s1:#f8f9fc; --b1:#e4e8f0; --b2:#d0d7e5;
+  --ink:#0d1b2e; --t2:#2d4568; --t3:#5a7090; --t4:#8fa3bc; --t5:#c2d0df;
+  --bull:#1557e8; --bull-d:rgba(21,87,232,.09);
+  --bear:#d4000f; --bear-d:rgba(212,0,15,.08);
+  --choch-col:#0e7fa5; --bos-bull:#1557e8; --bos-bear:#d4000f;
+  --swing-hi:#d4000f; --swing-lo:#1557e8;
+  --gold:#c78b00;
+  --font:'DM Sans',system-ui,sans-serif;
+  --mono:'DM Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg);color:var(--t2);font-family:var(--font);font-size:12px;overflow:hidden;}
+
+/* ── TOP BAR ── */
+.topbar{
+  height:50px;background:var(--ink);display:flex;align-items:center;
+  padding:0 16px;gap:10px;flex-shrink:0;border-bottom:2px solid var(--bull);
+}
+.tb-back{
+  display:flex;align-items:center;gap:4px;padding:4px 10px;
+  border:1px solid rgba(255,255,255,.15);border-radius:6px;
+  color:rgba(255,255,255,.6);font-size:10px;cursor:pointer;text-decoration:none;
+  transition:all .12s;
+}
+.tb-back:hover{border-color:rgba(255,255,255,.4);color:#fff;}
+.tb-sep{width:1px;height:22px;background:rgba(255,255,255,.1);}
+.tb-title{
+  font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;letter-spacing:.5px;
+  display:flex;align-items:center;gap:8px;
+}
+.tb-subtitle{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:1px;text-transform:uppercase;font-weight:400;}
+.pair-sel{
+  padding:4px 10px;border:1px solid rgba(255,255,255,.15);border-radius:6px;
+  background:transparent;color:#fff;font-family:var(--mono);font-size:11px;
+  cursor:pointer;outline:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,.4)'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+  padding-right:22px;appearance:none;
+}
+.pair-sel option{background:#1e293b;color:#fff;}
+.tf-row{display:flex;gap:3px;}
+.tf-btn{
+  padding:3px 9px;border:1px solid rgba(255,255,255,.15);border-radius:5px;
+  background:transparent;color:rgba(255,255,255,.5);font-family:var(--mono);
+  font-size:10px;font-weight:500;cursor:pointer;transition:all .1s;
+}
+.tf-btn:hover{border-color:rgba(255,255,255,.4);color:#fff;}
+.tf-btn.on{border-color:var(--bull);color:#60a5fa;background:rgba(21,87,232,.18);}
+
+/* mode tabs */
+.mode-row{display:flex;gap:3px;margin-left:4px;}
+.mode-btn{
+  padding:3px 9px;border:1px solid rgba(255,255,255,.1);border-radius:5px;
+  background:transparent;color:rgba(255,255,255,.4);font-family:var(--font);
+  font-size:9px;font-weight:600;cursor:pointer;transition:all .1s;text-transform:uppercase;letter-spacing:.5px;
+}
+.mode-btn:hover{color:rgba(255,255,255,.7);}
+.mode-btn.on{border-color:var(--gold);color:#fcd34d;background:rgba(199,139,0,.15);}
+
+.tb-r{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.refresh-btn{
+  padding:3px 10px;border:1px solid rgba(255,255,255,.12);border-radius:5px;
+  background:transparent;color:rgba(255,255,255,.4);font-family:var(--mono);
+  font-size:9px;cursor:pointer;transition:all .1s;
+}
+.refresh-btn:hover{border-color:rgba(255,255,255,.3);color:#fff;}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#60a5fa;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.live-txt{font-size:9px;color:rgba(255,255,255,.35);font-family:var(--mono);}
+
+/* ── LAYOUT ── */
+.layout{display:flex;height:calc(100vh - 50px);}
+.chart-col{flex:1;position:relative;overflow:hidden;}
+#chartEl{width:100%;height:100%;}
+#overlayCanvas{position:absolute;top:0;left:0;pointer-events:none;}
+
+/* loading */
+.chart-loading{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;background:var(--s1);
+  color:var(--t4);font-size:12px;gap:12px;z-index:5;
+}
+.spinner{width:28px;height:28px;border:2px solid var(--b2);
+  border-top-color:var(--bull);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:280px;background:var(--s0);border-left:1px solid var(--b1);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+}
+.sb-head{
+  padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--s1);
+  flex-shrink:0;
+}
+.sb-pair{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--ink);}
+.sb-sub{font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:1px;margin-top:2px;}
+
+.sb-body{flex:1;overflow-y:auto;padding:10px 14px;}
+.sb-section{margin-bottom:16px;}
+.sb-title{
+  font-size:8px;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--t4);font-weight:700;margin-bottom:8px;
+  padding-bottom:5px;border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;gap:6px;
+}
+.sb-title span{font-size:10px;}
+
+/* BOS/CHoCH event list */
+.event-item{
+  padding:8px 10px;border-radius:6px;margin-bottom:5px;
+  border-left:3px solid;display:flex;flex-direction:column;gap:3px;
+  background:var(--s1);border:1px solid var(--b1);
+}
+.event-item.bos-b{border-left-color:var(--bull);background:rgba(21,87,232,.04);}
+.event-item.bos-r{border-left-color:var(--bear);background:rgba(212,0,15,.04);}
+.event-item.choch-b{border-left-color:var(--choch-col);background:rgba(14,127,165,.05);}
+.event-item.choch-r{border-left-color:var(--gold);background:rgba(199,139,0,.05);}
+.ev-row1{display:flex;align-items:center;justify-content:space-between;}
+.ev-type{font-size:11px;font-weight:700;}
+.ev-price{font-size:11px;font-family:var(--mono);font-weight:600;color:var(--ink);}
+.ev-dir{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.ev-time{font-size:8px;color:var(--t5);font-family:var(--mono);}
+
+/* swing points */
+.swing-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 8px;border-radius:5px;background:var(--s1);
+  border:1px solid var(--b1);margin-bottom:3px;
+}
+.sw-lbl{font-size:9px;color:var(--t3);font-weight:600;}
+.sw-val{font-size:10px;font-family:var(--mono);font-weight:700;}
+
+/* legend */
+.leg-item{display:flex;align-items:center;gap:7px;padding:5px 0;font-size:10px;color:var(--t3);}
+.leg-line{width:28px;height:2px;border-radius:1px;flex-shrink:0;}
+.leg-dash{width:28px;height:2px;flex-shrink:0;
+  background:repeating-linear-gradient(90deg,currentColor 0,currentColor 5px,transparent 5px,transparent 9px);}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:2px solid;}
+
+/* status badge */
+.status-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:20px;font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.5px;border:1.5px solid;
+}
+.sb-bull{border-color:var(--bull);color:var(--bull);background:var(--bull-d);}
+.sb-bear{border-color:var(--bear);color:var(--bear);background:var(--bear-d);}
+.sb-neut{border-color:var(--b2);color:var(--t4);background:var(--s2);}
+
+/* structure summary card */
+.struct-card{
+  padding:10px 12px;border-radius:6px;
+  background:var(--s1);border:1.5px solid var(--b1);margin-bottom:10px;
+}
+.struct-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.struct-lbl{font-size:9px;color:var(--t4);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.struct-val{font-size:11px;font-family:var(--mono);font-weight:700;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px;}
+
+/* tooltip */
+.tooltip{
+  position:absolute;background:var(--ink);color:#fff;
+  padding:5px 9px;border-radius:5px;font-size:9px;font-family:var(--mono);
+  pointer-events:none;display:none;z-index:10;line-height:1.5;
+  border:1px solid rgba(255,255,255,.1);
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="tb-back" href="/">← Scanner</a>
+  <div class="tb-sep"></div>
+  <div class="tb-title">
+    <select class="pair-sel" id="pairSel"></select>
+    <span class="tb-subtitle">BOS · CHoCH · Market Structure</span>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tf-row" id="tfRow">
+    <button class="tf-btn" data-tf="15m">15M</button>
+    <button class="tf-btn on" data-tf="1h">1H</button>
+    <button class="tf-btn" data-tf="4h">4H</button>
+    <button class="tf-btn" data-tf="1d">1D</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn on" data-mode="structure">Structure</button>
+    <button class="mode-btn" data-mode="all">All Levels</button>
+  </div>
+  <div class="tb-r">
+    <button class="refresh-btn" id="refreshBtn">↺ Refresh</button>
+    <div class="live-dot" id="liveDot"></div>
+    <span class="live-txt" id="liveLabel">LIVE</span>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="chart-col">
+    <div class="chart-loading" id="loadOverlay">
+      <div class="spinner"></div>
+      <span id="loadMsg">Loading structure chart…</span>
+    </div>
+    <div id="chartEl"></div>
+    <canvas id="overlayCanvas"></canvas>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sb-head">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span class="sb-pair" id="sbPair">—</span>
+        <span id="sbBias"></span>
+      </div>
+      <div class="sb-sub" id="sbSub">Market Structure Analysis</div>
+    </div>
+
+    <div class="sb-body">
+      <!-- Structure summary -->
+      <div class="sb-section">
+        <div class="sb-title"><span>📐</span> Structure Summary</div>
+        <div class="struct-card" id="structCard">
+          <div style="color:var(--t5);font-size:10px;text-align:center;padding:8px 0;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Recent BOS/CHoCH events -->
+      <div class="sb-section">
+        <div class="sb-title"><span>⚡</span> Recent Events</div>
+        <div id="eventList">
+          <div style="color:var(--t5);font-size:10px;text-align:center;padding:12px 0;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Swing points -->
+      <div class="sb-section">
+        <div class="sb-title"><span>📍</span> Swing Points</div>
+        <div id="swingList">
+          <div style="color:var(--t5);font-size:10px;text-align:center;padding:8px 0;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="sb-section">
+        <div class="sb-title"><span>🔑</span> Chart Legend</div>
+        <div class="leg-item">
+          <div class="leg-line" style="background:var(--bull);height:3px;"></div>
+          <span>Bullish BOS — trend continuation</span>
+        </div>
+        <div class="leg-item">
+          <div class="leg-line" style="background:var(--bear);height:3px;"></div>
+          <span>Bearish BOS — trend continuation</span>
+        </div>
+        <div class="leg-item">
+          <div class="leg-dash" style="color:var(--choch-col);height:3px;"></div>
+          <span>Bullish CHoCH — potential reversal</span>
+        </div>
+        <div class="leg-item">
+          <div class="leg-dash" style="color:var(--gold);height:3px;"></div>
+          <span>Bearish CHoCH — potential reversal</span>
+        </div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:rgba(212,0,15,.15);border-color:var(--bear);"></div>
+          <span>Swing High (lower high = LH, higher high = HH)</span>
+        </div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:rgba(21,87,232,.15);border-color:var(--bull);"></div>
+          <span>Swing Low (lower low = LL, higher low = HL)</span>
+        </div>
+        <div class="leg-item">
+          <div class="leg-line" style="background:var(--t5);height:1px;border-top:1px dashed var(--t5);background:none;"></div>
+          <span>Structure trend line connecting swings</span>
+        </div>
+      </div>
+
+      <div style="font-size:9px;color:var(--t5);line-height:1.7;text-align:center;padding:4px 0 12px;">
+        BOS = Break of Structure (continuation)<br/>
+        CHoCH = Change of Character (reversal)<br/>
+        HH/HL = Bullish · LH/LL = Bearish<br/>
+        Data from MT5 via FastAPI backend
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   SMC STRUCTURE CHART  — BOS / CHoCH FOCUSED
+   Fetches OHLCV from /api/candles and SMC analysis from /api/analyse
+   Then calculates swing points and renders:
+   • Candlestick chart with clean TradingView-style price grid
+   • Horizontal lines for every BOS / CHoCH level
+   • Canvas overlay: swing point dots + labels + structure trend lines
+   • Sidebar showing all structure events with direction + price
+════════════════════════════════════════════════════════════════════════ */
+
+const ALL_PAIRS = [
+  'EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','NZDUSD','USDCAD',
+  'EURGBP','EURJPY','EURCHF','EURAUD','EURNZD','EURCAD',
+  'GBPJPY','GBPCHF','GBPAUD','GBPNZD','GBPCAD',
+  'AUDJPY','AUDCHF','AUDNZD','AUDCAD','NZDJPY','NZDCHF','NZDCAD',
+  'CHFJPY','CADJPY','CADCHF',
+  'USDMXN','USDZAR','USDTRY','USDSGD','USDHKD','USDNOK','USDSEK',
+  'USDDKK','USDPLN','USDHUF','USDCZK','EURTRY','USDINR','USDTHB',
+  'USDMYR','USDIDR','USDPHP','USDCNH','BTCUSD',
+];
+const DISP = {
+  EURUSD:'EUR/USD',GBPUSD:'GBP/USD',USDJPY:'USD/JPY',USDCHF:'USD/CHF',
+  AUDUSD:'AUD/USD',NZDUSD:'NZD/USD',USDCAD:'USD/CAD',EURGBP:'EUR/GBP',
+  EURJPY:'EUR/JPY',EURCHF:'EUR/CHF',EURAUD:'EUR/AUD',EURNZD:'EUR/NZD',
+  EURCAD:'EUR/CAD',GBPJPY:'GBP/JPY',GBPCHF:'GBP/CHF',GBPAUD:'GBP/AUD',
+  GBPNZD:'GBP/NZD',GBPCAD:'GBP/CAD',AUDJPY:'AUD/JPY',AUDCHF:'AUD/CHF',
+  AUDNZD:'AUD/NZD',AUDCAD:'AUD/CAD',NZDJPY:'NZD/JPY',NZDCHF:'NZD/CHF',
+  NZDCAD:'NZD/CAD',CHFJPY:'CHF/JPY',CADJPY:'CAD/JPY',CADCHF:'CAD/CHF',
+  USDMXN:'USD/MXN',USDZAR:'USD/ZAR',USDTRY:'USD/TRY',USDSGD:'USD/SGD',
+  USDHKD:'USD/HKD',USDNOK:'USD/NOK',USDSEK:'USD/SEK',USDDKK:'USD/DKK',
+  USDPLN:'USD/PLN',USDHUF:'USD/HUF',USDCZK:'USD/CZK',EURTRY:'EUR/TRY',
+  USDINR:'USD/INR',USDTHB:'USD/THB',USDMYR:'USD/MYR',USDIDR:'USD/IDR',
+  USDPHP:'USD/PHP',USDCNH:'USD/CNH',BTCUSD:'BTC/USD',
+};
+
+// ── URL params ─────────────────────────────────────────────────────────
+const urlP  = new URLSearchParams(location.search);
+let sym     = urlP.get('sym') || 'EURUSD';
+let tf      = urlP.get('tf')  || '1h';
+let mode    = 'structure';  // 'structure' | 'all'
+
+// ── Populate selector ──────────────────────────────────────────────────
+const pairSel = document.getElementById('pairSel');
+ALL_PAIRS.forEach(p => {
+  const o = document.createElement('option');
+  o.value = p; o.text = DISP[p]||p;
+  if (p === sym) o.selected = true;
+  pairSel.appendChild(o);
+});
+pairSel.addEventListener('change', e => { sym = e.target.value; load(); updateURL(); });
+
+// ── TF buttons ─────────────────────────────────────────────────────────
+document.querySelectorAll('.tf-btn').forEach(b => {
+  b.classList.toggle('on', b.dataset.tf === tf);
+  b.addEventListener('click', () => {
+    tf = b.dataset.tf;
+    document.querySelectorAll('.tf-btn').forEach(x => x.classList.toggle('on', x===b));
+    load(); updateURL();
+  });
+});
+
+// ── Mode buttons ───────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('on', x===b));
+    load();
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+
+function updateURL() {
+  history.replaceState({}, '', `/chart-bos?sym=${sym}&tf=${tf}`);
+}
+
+// ── Format ─────────────────────────────────────────────────────────────
+function fmt(p) {
+  if (!p || !isFinite(p)) return '—';
+  if (p >= 10000) return p.toFixed(0);
+  if (p >= 1000)  return p.toFixed(2);
+  if (p >= 100)   return p.toFixed(3);
+  if (p >= 10)    return p.toFixed(4);
+  return p.toFixed(5);
+}
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(typeof ts === 'number' ? ts * 1000 : ts);
+  return d.toLocaleString('en-GB', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+// ── Swing detection (mirrors smc_engine.py) ────────────────────────────
+function findSwings(candles, length=5) {
+  const swings = [];
+  const n = candles.length;
+  for (let i = length; i < n - length; i++) {
+    let isHi = true, isLo = true;
+    for (let j = i - length; j <= i + length; j++) {
+      if (j === i) continue;
+      if (candles[j].high  >= candles[i].high)  isHi = false;
+      if (candles[j].low   <= candles[i].low)   isLo = false;
+    }
+    if (isHi) swings.push({ i, type:1,  level:candles[i].high,  time:candles[i].time, candle:candles[i] });
+    else if (isLo) swings.push({ i, type:-1, level:candles[i].low, time:candles[i].time, candle:candles[i] });
+  }
+  return swings;
+}
+
+// Classify swings as HH/HL/LH/LL
+function classifySwings(swings) {
+  const highs = swings.filter(s => s.type === 1);
+  const lows  = swings.filter(s => s.type === -1);
+  const out   = [...swings];
+  highs.forEach((s, i) => {
+    if (i === 0) { s.label = 'SH'; return; }
+    s.label = s.level > highs[i-1].level ? 'HH' : 'LH';
+  });
+  lows.forEach((s, i) => {
+    if (i === 0) { s.label = 'SL'; return; }
+    s.label = s.level > lows[i-1].level ? 'HL' : 'LL';
+  });
+  return out;
+}
+
+// Detect BOS/CHoCH from swing sequence
+function detectStructure(candles, swings) {
+  const events = [];
+  const highs  = swings.filter(s => s.type === 1);
+  const lows   = swings.filter(s => s.type === -1);
+  if (highs.length < 2 || lows.length < 2) return events;
+
+  const rH = highs[highs.length-1], pH = highs[highs.length-2];
+  const rL = lows[lows.length-1],   pL = lows[lows.length-2];
+
+  const bullStr = rH.level > pH.level && rL.level > pL.level;
+  const bearStr = rH.level < pH.level && rL.level < pL.level;
+
+  // Check if price has crossed these swing levels recently
+  const lookback = candles.slice(-20);
+
+  // Look for high break
+  const highBreakIdx = candles.findIndex((c,i) => i > rH.i && c.close > rH.level);
+  if (highBreakIdx > -1) {
+    const c = candles[highBreakIdx];
+    events.push({
+      type:    bullStr ? 'BOS' : 'CHoCH',
+      dir:     1,
+      level:   rH.level,
+      time:    c.time,
+      breakTime: c.time,
+      label:   bullStr ? 'BOS ▲' : 'CHoCH ▲',
+    });
+  }
+
+  // Look for low break
+  const lowBreakIdx = candles.findIndex((c,i) => i > rL.i && c.close < rL.level);
+  if (lowBreakIdx > -1) {
+    const c = candles[lowBreakIdx];
+    events.push({
+      type:    bearStr ? 'BOS' : 'CHoCH',
+      dir:     -1,
+      level:   rL.level,
+      time:    c.time,
+      breakTime: c.time,
+      label:   bearStr ? 'BOS ▼' : 'CHoCH ▼',
+    });
+  }
+
+  // Also add structure from API analysis for the most recent
+  return events;
+}
+
+// ── State ──────────────────────────────────────────────────────────────
+let chart        = null;
+let candleSeries = null;
+let candles      = [];
+let analysis     = null;
+let swings       = [];
+let events       = [];
+
+const canvas = document.getElementById('overlayCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const el = document.getElementById('chartEl');
+  canvas.width  = el.clientWidth;
+  canvas.height = el.clientHeight;
+  canvas.style.width  = el.clientWidth  + 'px';
+  canvas.style.height = el.clientHeight + 'px';
+}
+
+// ── OVERLAY DRAWING ────────────────────────────────────────────────────
+function drawOverlay() {
+  if (!chart || !candleSeries || !candles.length) return;
+  resizeCanvas();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const ts = chart.timeScale();
+
+  // Helper: get x coordinate from timestamp
+  const getX = (time) => {
+    try { return ts.timeToCoordinate(time); } catch { return null; }
+  };
+  // Helper: get y coordinate from price
+  const getY = (price) => {
+    try { return candleSeries.priceToCoordinate(price); } catch { return null; }
+  };
+
+  // ── Draw swing trend lines ──────────────────────────────────────────
+  const SWING_LEN = 5;
+  const TAIL_PX   = 40; // extend line TAIL_PX pixels to the right
+
+  const highs = swings.filter(s => s.type === 1).slice(-8);
+  const lows  = swings.filter(s => s.type === -1).slice(-8);
+
+  // Connect swing highs with dashed line
+  if (highs.length >= 2) {
+    ctx.beginPath();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(212,0,15,0.35)';
+    ctx.lineWidth   = 1;
+    highs.forEach((sw, i) => {
+      const x = getX(sw.time), y = getY(sw.level);
+      if (x == null || y == null) return;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    // extend to right edge
+    const lastHi = highs[highs.length-1];
+    const lx = getX(lastHi.time), ly = getY(lastHi.level);
+    if (lx != null) ctx.lineTo(lx + TAIL_PX, ly);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Connect swing lows with dashed line
+  if (lows.length >= 2) {
+    ctx.beginPath();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(21,87,232,0.35)';
+    ctx.lineWidth   = 1;
+    lows.forEach((sw, i) => {
+      const x = getX(sw.time), y = getY(sw.level);
+      if (x == null || y == null) return;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    const lastLo = lows[lows.length-1];
+    const lx = getX(lastLo.time), ly = getY(lastLo.level);
+    if (lx != null) ctx.lineTo(lx + TAIL_PX, ly);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ── Draw swing point dots + labels ─────────────────────────────────
+  ctx.font = 'bold 8px DM Mono, monospace';
+  ctx.textAlign = 'center';
+
+  swings.slice(-20).forEach(sw => {
+    const x = getX(sw.time);
+    const y = getY(sw.level);
+    if (x == null || y == null) return;
+
+    const isHi  = sw.type === 1;
+    const color = isHi ? '#d4000f' : '#1557e8';
+    const bgCol = isHi ? 'rgba(212,0,15,0.12)' : 'rgba(21,87,232,0.12)';
+
+    // Circle
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle   = bgCol;
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.5;
+    ctx.stroke();
+
+    // Label (HH/HL/LH/LL/SH/SL)
+    const lbl = sw.label || (isHi ? 'SH' : 'SL');
+    const ly  = isHi ? y - 11 : y + 16;
+    ctx.fillStyle    = color;
+    ctx.fillText(lbl, x, ly);
+
+    // Price label
+    ctx.font      = '8px DM Mono, monospace';
+    ctx.fillStyle = 'rgba(90,112,144,0.85)';
+    const ply = isHi ? y - 21 : y + 25;
+    ctx.fillText(fmt(sw.level), x, ply);
+    ctx.font = 'bold 8px DM Mono, monospace';
+  });
+
+  // ── Draw BOS/CHoCH break arrows ─────────────────────────────────────
+  events.forEach(ev => {
+    const x = getX(ev.breakTime);
+    const y = getY(ev.level);
+    if (x == null || y == null) return;
+
+    const isBull   = ev.dir === 1;
+    const isChoch  = ev.type === 'CHoCH';
+    const color    = isChoch ? (isBull ? '#0e7fa5' : '#c78b00') : (isBull ? '#1557e8' : '#d4000f');
+
+    // Vertical break marker (small arrow)
+    const arrowH = 14;
+    const arrowY1 = isBull ? y + arrowH : y - arrowH;
+    const arrowY2 = y;
+
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 2;
+    ctx.moveTo(x, arrowY1);
+    ctx.lineTo(x, arrowY2);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    if (isBull) {
+      ctx.moveTo(x,      arrowY2 - 6);
+      ctx.lineTo(x - 4,  arrowY2 + 2);
+      ctx.lineTo(x + 4,  arrowY2 + 2);
+    } else {
+      ctx.moveTo(x,      arrowY2 + 6);
+      ctx.lineTo(x - 4,  arrowY2 - 2);
+      ctx.lineTo(x + 4,  arrowY2 - 2);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Break label
+    const lbgY = isBull ? arrowY2 - 18 : arrowY2 + 22;
+    ctx.fillStyle    = 'rgba(0,0,0,0)';
+    ctx.font         = 'bold 8px DM Mono, monospace';
+    ctx.textAlign    = 'center';
+
+    // Background pill for label
+    const lbl   = ev.label;
+    const tw    = ctx.measureText(lbl).width + 8;
+    const pillY = lbgY - 8;
+    ctx.fillStyle   = color;
+    ctx.globalAlpha = 0.12;
+    ctx.beginPath();
+    const px = x - tw/2, py = pillY - 8, pr = 3;
+    ctx.moveTo(px + pr, py);
+    ctx.arcTo(px + tw, py, px + tw, py + 12, pr);
+    ctx.arcTo(px + tw, py + 12, px, py + 12, pr);
+    ctx.arcTo(px, py + 12, px, py, pr);
+    ctx.arcTo(px, py, px + tw, py, pr);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    ctx.fillStyle = color;
+    ctx.fillText(lbl, x, lbgY);
+  });
+
+  ctx.textAlign = 'left';  // reset
+}
+
+// ── SIDEBAR RENDERING ──────────────────────────────────────────────────
+function renderSidebar() {
+  if (!analysis) return;
+  const d = analysis;
+
+  // Header
+  document.getElementById('sbPair').textContent = DISP[d.symbol] || d.symbol;
+  const biasEl = document.getElementById('sbBias');
+  if      (d.bias === 1)  biasEl.innerHTML = `<span class="status-badge sb-bull">▲ BULL</span>`;
+  else if (d.bias === -1) biasEl.innerHTML = `<span class="status-badge sb-bear">▼ BEAR</span>`;
+  else                    biasEl.innerHTML = `<span class="status-badge sb-neut">◆ NEUT</span>`;
+
+  // Structure summary
+  const sw = analysis._swings || swings;
+  const highs  = sw.filter(s => s.type === 1);
+  const lows   = sw.filter(s => s.type === -1);
+  const rH = highs[highs.length-1], pH = highs[highs.length-2];
+  const rL = lows[lows.length-1],   pL = lows[lows.length-2];
+  const hStr = rH&&pH ? (rH.level>pH.level?'HH':'LH') : '—';
+  const lStr = rL&&pL ? (rL.level>pL.level?'HL':'LL') : '—';
+  const struct = (hStr==='HH'&&lStr==='HL') ? '▲ Bullish (HH/HL)' :
+                 (hStr==='LH'&&lStr==='LL') ? '▼ Bearish (LH/LL)' : '◆ Mixed';
+  const structCol = struct.startsWith('▲') ? 'var(--bull)' : struct.startsWith('▼') ? 'var(--bear)' : 'var(--t4)';
+
+  document.getElementById('structCard').innerHTML = `
+    <div class="struct-row"><span class="struct-lbl">Market Structure</span>
+      <span class="struct-val" style="color:${structCol}">${struct}</span></div>
+    <div class="struct-row"><span class="struct-lbl">Latest High</span>
+      <span class="struct-val" style="color:var(--bear)">${hStr} @ ${rH?fmt(rH.level):'—'}</span></div>
+    <div class="struct-row"><span class="struct-lbl">Latest Low</span>
+      <span class="struct-val" style="color:var(--bull)">${lStr} @ ${rL?fmt(rL.level):'—'}</span></div>
+    ${d.bos_level?`<div class="struct-row"><span class="struct-lbl">BOS Level</span>
+      <span class="struct-val" style="color:${d.bos===1?'var(--bull)':'var(--bear)'}">${d.bos===1?'▲':'▼'} ${fmt(d.bos_level)}</span></div>`:''}
+    ${d.choch_level?`<div class="struct-row" style="margin-top:2px;padding-top:5px;border-top:1px solid var(--b1)">
+      <span class="struct-lbl">CHoCH Level</span>
+      <span class="struct-val" style="color:var(--choch-col)">${d.choch===1?'▲':'▼'} ${fmt(d.choch_level)}</span></div>`:''}
+    ${d.swing?`<div class="struct-row"><span class="struct-lbl">Swing Pattern</span>
+      <span class="struct-val">${d.swing.label}</span></div>`:''}
+  `;
+
+  // Event list
+  const evHtml = events.length === 0
+    ? `<div style="color:var(--t5);font-size:10px;text-align:center;padding:8px 0">No clear structure breaks detected</div>`
+    : events.map(ev => {
+        const isBull  = ev.dir === 1;
+        const isChoch = ev.type === 'CHoCH';
+        const cls     = isChoch ? (isBull?'choch-b':'choch-r') : (isBull?'bos-b':'bos-r');
+        const col     = isChoch ? (isBull?'var(--choch-col)':'var(--gold)')
+                                : (isBull?'var(--bull)':'var(--bear)');
+        return `<div class="event-item ${cls}">
+          <div class="ev-row1">
+            <span class="ev-type" style="color:${col}">${ev.type}</span>
+            <span class="ev-price">${fmt(ev.level)}</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span class="ev-dir" style="color:${col}">${isBull?'▲ Bullish':'▼ Bearish'}</span>
+            <span class="ev-time">${fmtTime(ev.breakTime)}</span>
+          </div>
+          <div style="font-size:9px;color:var(--t4);margin-top:1px;">
+            ${isChoch
+              ? (isBull ? 'Potential reversal — bearish→bullish shift'
+                        : 'Potential reversal — bullish→bearish shift')
+              : (isBull ? 'Trend continuation — structure holds bullish'
+                        : 'Trend continuation — structure holds bearish')}
+          </div>
+        </div>`;
+      }).join('');
+  document.getElementById('eventList').innerHTML = evHtml;
+
+  // Swing points (last 6)
+  const recent = [...swings].reverse().slice(0, 8);
+  document.getElementById('swingList').innerHTML = recent.map(sw => {
+    const col = sw.type === 1 ? 'var(--bear)' : 'var(--bull)';
+    const lbl = sw.label || (sw.type===1?'SH':'SL');
+    return `<div class="swing-item">
+      <span class="sw-lbl" style="color:${col}">${lbl} ${sw.type===1?'High':'Low'}</span>
+      <span class="sw-val">${fmt(sw.level)}</span>
+    </div>`;
+  }).join('') || `<div style="color:var(--t5);font-size:10px;text-align:center;padding:8px 0">No swing points found</div>`;
+}
+
+// ── MAIN CHART BUILDER ─────────────────────────────────────────────────
+async function load() {
+  const loadEl  = document.getElementById('loadOverlay');
+  const loadMsg = document.getElementById('loadMsg');
+  loadEl.style.display = 'flex';
+  loadMsg.textContent  = `Loading ${DISP[sym]||sym} ${tf.toUpperCase()}…`;
+  document.getElementById('liveDot').style.background = '#f59e0b';
+
+  if (chart) { try { chart.remove(); } catch {} chart = null; candleSeries = null; }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Fetch data
+  try {
+    const [cr, ar] = await Promise.all([
+      fetch(`/api/candles/${sym}?tf=${tf}&count=200`),
+      fetch(`/api/analyse/${sym}?tf=${tf}&count=200`),
+    ]);
+    if (!cr.ok) throw new Error(`Candles HTTP ${cr.status}`);
+    const cj = await cr.json();
+    candles  = cj.candles || [];
+    if (!candles.length) throw new Error('No data returned');
+    if (ar.ok) analysis = await ar.json();
+  } catch(e) {
+    loadMsg.textContent = `⚠ ${e.message}`;
+    return;
+  }
+
+  // Parse candles
+  const chartData = candles.map(c => ({
+    time:  typeof c.time === 'string' ? Math.floor(new Date(c.time).getTime()/1000) : Math.floor(c.time),
+    open:  c.open, high:c.high, low:c.low, close:c.close,
+  })).sort((a,b)=>a.time-b.time).filter((c,i,a)=>!i||c.time!==a[i-1].time);
+
+  // Compute swings client-side for overlay
+  swings = classifySwings(findSwings(chartData, 5));
+  events = detectStructure(chartData, swings);
+  // Also pull from API analysis
+  if (analysis) {
+    if (analysis.bos_level && !events.find(e=>Math.abs(e.level-analysis.bos_level)<0.00001)) {
+      events.push({ type:'BOS', dir:analysis.bos, level:analysis.bos_level,
+        time:chartData[chartData.length-1].time, breakTime:chartData[chartData.length-1].time,
+        label:`BOS ${analysis.bos===1?'▲':'▼'}` });
+    }
+    if (analysis.choch_level && !events.find(e=>Math.abs(e.level-analysis.choch_level)<0.00001)) {
+      events.push({ type:'CHoCH', dir:analysis.choch, level:analysis.choch_level,
+        time:chartData[chartData.length-1].time, breakTime:chartData[chartData.length-1].time,
+        label:`CHoCH ${analysis.choch===1?'▲':'▼'}` });
+    }
+  }
+
+  // Create chart
+  const el = document.getElementById('chartEl');
+  resizeCanvas();
+
+  chart = LightweightCharts.createChart(el, {
+    width:  el.clientWidth,
+    height: el.clientHeight,
+    layout: {
+      background: { color:'#ffffff' },
+      textColor:  '#5a7090',
+      fontSize:   11,
+      fontFamily: 'DM Mono, monospace',
+    },
+    grid: {
+      // Clean horizontal grid lines matching price scale — like TradingView
+      vertLines: { color:'rgba(228,232,240,0.6)', style:0 },
+      horzLines: { color:'rgba(228,232,240,0.8)', style:0 },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color:'#94a3b8', width:1, style:2, labelBackgroundColor:'#0d1b2e' },
+      horzLine: { color:'#94a3b8', width:1, style:2, labelBackgroundColor:'#0d1b2e' },
+    },
+    rightPriceScale: {
+      borderColor: '#e4e8f0',
+      borderVisible: true,
+      // This makes price levels show cleanly like TradingView
+      scaleMargins: { top:0.12, bottom:0.12 },
+      mode: LightweightCharts.PriceScaleMode.Normal,
+      autoScale: true,
+    },
+    timeScale: {
+      borderColor: '#e4e8f0',
+      timeVisible: true,
+      secondsVisible: false,
+      fixRightEdge: false,
+      tickMarkFormatter: (time, tickMarkType, locale) => {
+        const d = new Date(time * 1000);
+        if (tickMarkType <= 1) return d.getFullYear().toString();
+        if (tickMarkType === 2) return d.toLocaleDateString('en-GB',{month:'short'});
+        if (tickMarkType === 3) return d.toLocaleDateString('en-GB',{month:'short',day:'numeric'});
+        return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      },
+    },
+    localization: {
+      priceFormatter: p => fmt(p),
+    },
+    handleScale: { axisPressedMouseMove:{ time:true, price:true } },
+    handleScroll: true,
+  });
+
+  // Candles
+  candleSeries = chart.addCandlestickSeries({
+    upColor:          '#1557e8',
+    downColor:        '#d4000f',
+    borderUpColor:    '#1557e8',
+    borderDownColor:  '#d4000f',
+    wickUpColor:      '#1557e8',
+    wickDownColor:    '#d4000f',
+    priceLineVisible: false,
+    lastValueVisible: true,
+  });
+  candleSeries.setData(chartData);
+
+  // ── Price lines for BOS / CHoCH ─────────────────────────────────────
+  const addPriceLine = (price, color, title, style=2, width=2) => {
+    if (!price || !isFinite(price)) return;
+    candleSeries.createPriceLine({
+      price, color, lineWidth:width, lineStyle:style,
+      axisLabelVisible:true, title,
+    });
+  };
+
+  if (mode === 'structure' || mode === 'all') {
+    // BOS
+    if (analysis?.bos_level) {
+      const c = analysis.bos === 1 ? '#1557e8' : '#d4000f';
+      addPriceLine(analysis.bos_level, c,
+        analysis.bos===1 ? '▲ BOS' : '▼ BOS', 2, 2);
+    }
+    // CHoCH — thick dashed, prominent
+    if (analysis?.choch_level) {
+      const c = analysis.choch === 1 ? '#0e7fa5' : '#c78b00';
+      addPriceLine(analysis.choch_level, c,
+        analysis.choch===1 ? '▲ CHoCH' : '▼ CHoCH', 3, 3);
+    }
+    // Recent swing highs / lows as light reference lines
+    const recentHighs = swings.filter(s=>s.type===1).slice(-3);
+    const recentLows  = swings.filter(s=>s.type===-1).slice(-3);
+    recentHighs.forEach(sw => addPriceLine(sw.level, 'rgba(212,0,15,0.4)', sw.label||'SH', 1, 1));
+    recentLows.forEach(sw  => addPriceLine(sw.level, 'rgba(21,87,232,0.4)', sw.label||'SL', 1, 1));
+  }
+
+  if (mode === 'all' && analysis) {
+    if (analysis.fvg && !analysis.fvg.mitigated) {
+      const c = analysis.fvg.type===1?'#1557e8':'#d4000f';
+      addPriceLine(analysis.fvg.top, c, analysis.fvg.type===1?'FVG ▲':'FVG ▼', 1, 1);
+      addPriceLine(analysis.fvg.bot, c, '', 1, 1);
+    }
+    if (analysis.ob && !analysis.ob.mitigated) {
+      const c = analysis.ob.type===1?'#1557e8':'#d4000f';
+      addPriceLine(analysis.ob.top, c, analysis.ob.type===1?'Bull OB':'Bear OB', 2, 1);
+      addPriceLine(analysis.ob.bot, c, '', 2, 1);
+    }
+    if (analysis.liquidity)
+      addPriceLine(analysis.liquidity.level, '#c78b00', analysis.liquidity.label, 1, 1);
+  }
+
+  // Fit and draw overlay
+  chart.timeScale().fitContent();
+  setTimeout(() => { drawOverlay(); loadEl.style.display='none'; }, 150);
+
+  // Redraw overlay on pan/zoom
+  chart.timeScale().subscribeVisibleLogicalRangeChange(() => setTimeout(drawOverlay, 30));
+
+  // Crosshair shows bar OHLC
+  chart.subscribeCrosshairMove(param => {
+    if (!param?.seriesData) return;
+    const bar = param.seriesData.get(candleSeries);
+    if (bar) {
+      const tt = document.getElementById('tooltip');
+      tt.style.display = 'block';
+      tt.style.left = (param.point?.x + 14) + 'px';
+      tt.style.top  = (param.point?.y - 40) + 'px';
+      tt.innerHTML =
+        `O: ${fmt(bar.open)}<br>` +
+        `H: ${fmt(bar.high)}<br>` +
+        `L: ${fmt(bar.low)}<br>` +
+        `C: <strong>${fmt(bar.close)}</strong>`;
+    }
+    drawOverlay();
+  });
+
+  // Resize handler
+  const ro = new ResizeObserver(() => {
+    if (chart) chart.applyOptions({ width:el.clientWidth, height:el.clientHeight });
+    resizeCanvas();
+    setTimeout(drawOverlay, 50);
+  });
+  ro.observe(el);
+
+  document.getElementById('liveDot').style.background = '#60a5fa';
+  renderSidebar();
+}
+
+// ── Auto-refresh every 60s ─────────────────────────────────────────────
+setInterval(load, 60000);
+
+// ── Init ───────────────────────────────────────────────────────────────
+load();
+</script>
+</body>
+</html>
